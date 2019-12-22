@@ -1,0 +1,151 @@
+---
+title: "Lending Club Analysis - Yuyang Wang"
+output: html_notebook
+---
+```{r}
+install.packages("rpart")
+install.packages("rpart.plot")
+```
+
+
+```{r}
+#loading in libraries
+library(magrittr)
+library(rpart)
+library(rpart.plot)
+```
+
+
+Part 1 - Data Loading & Cleanup
+
+```{r}
+set.seed(22)
+```
+
+
+```{r}
+#Read in all data
+training_data = read.csv("/Users/yuyangwang 1/Desktop/OIDD 245/lab4-lending_club/LoanStats3c.csv", skip = 1)
+test_data = read.csv("/Users/yuyangwang 1/Desktop/OIDD 245/lab4-lending_club/LoanStats3d.csv", skip = 1)
+
+#Remove the last two rows
+training_data = training_data[-c(nrow(training_data)), ]
+training_data = training_data[-c(nrow(training_data)), ]
+test_data = test_data[-c(nrow(test_data)), ]
+test_data = test_data[-c(nrow(test_data)), ]
+```
+
+Part 2 - Descriptive Statistics
+
+```{r}
+#if else to assign whether a row is highgrade or not
+training_data$highgrade = ifelse(training_data$grade == "A" | training_data$grade == "B", 1, 0)
+```
+
+```{r}
+#find proportion of loans that are highgrade in training data
+proportion = sum(training_data$highgrade) / nrow(training_data)
+proportion
+```
+
+The proportion of loans that are considered highgrade is 0.4160905 whichis approximately 41.6%
+
+Different t-tests
+
+For all 3 factors (whether or not debtor's income is above or below median income, whether or not debtor's income is above or below median loan amount, and whether debtor rent their home or not), the p-values from the t-tests are less than 0.05, and therefore they are all statistically significant.
+
+```{r}
+#above/below median income
+training_data$aboveMedInc = ifelse(training_data$annual_inc > median(training_data$annual_inc), 1, 0)
+t.test(training_data$aboveMedInc ~ training_data$highgrade)
+
+#above/below median loan amount
+training_data$aboveMedLoan = ifelse(training_data$loan_amnt > median(training_data$loan_amnt), 1, 0)
+t.test(training_data$aboveMedLoan ~ training_data$highgrade)
+
+#debtor rents home or not
+training_data$hasRent = ifelse(training_data$home_ownership == "RENT", 1, 0)
+t.test(training_data$hasRent ~ training_data$highgrade)
+```
+
+Part 3
+
+Accuracy of this classifier on training data is: 0.6603021
+
+Accuracy of classfier that assigns 0 to all rows: 0.5839059
+
+Accuracy of classifier that assigns 0 or 1 randomly: 0.4160941
+
+Therefore, the accuracy of thie classifier on the training data is more accurate than that of assigning 0 to all rows and assigning 0 or 1 randomly.
+
+```{r}
+#glm to predict highgrade with home ownership, annual income, loan amount, verification status, and purpose
+ml_model = glm(data = training_data, highgrade ~ home_ownership + annual_inc + loan_amnt + verification_status + purpose, family = binomial)
+
+#predict
+training_data$prob = predict(ml_model, type="response")
+training_data$prediction = ifelse(training_data$prob > 0.53, 1, 0)
+mean(training_data$highgrade == training_data$prediction)
+
+#all zeros
+mean(training_data$highgrade == 0)
+
+#randomly generate 0 or 1
+mean(training_data$highgrade == (runif(nrow(training_data), 0, 1)< 1))
+```
+
+Part 4
+
+Accuracy of this classifier on training data is: 0.6475828
+
+Accuracy of classfier that assigns 0 to all rows: 0.5839059
+
+Accuracy of classifier that assigns 0 or 1 randomly: 0.4160941
+
+By comparing the accuracy of both models, the accuracy of the clasification model is slightly lower than that of the logistic model.
+
+```{r}
+fit = rpart(highgrade ~ home_ownership + annual_inc + loan_amnt + verification_status + purpose, data = training_data, method="class")
+
+rpart.plot(fit)
+text(fit)
+
+#prediction on training data
+z = predict(fit, training_data, type="class")
+z = as.numeric(levels(z)[z])
+#cbind(predict = z, actual_grade = training_data$highgrade)[,]
+mean(z == training_data$highgrade)
+
+#all zeros
+mean(training_data$highgrade == 0)
+
+#randomly generate 0 or 1
+mean(training_data$highgrade == (runif(nrow(training_data), 0, 1)< 1))
+```
+
+Part 5
+
+For both the models, their predictions on the test data is slightly lower than their predictions on the training data; however that is expected. The accuracies are 0.6405417 and 0.6290051 for each model respectively. Therefore, the logistic model is slightly more accurate than the clasification model, though both are still higher than the accuracies when assigning 0 to all rows or assigining 0 or 1 randomly.
+
+```{r}
+#removing row with education for purpose column 
+test_data = test_data[test_data$purpose != "educational",]
+test_data$highgrade = ifelse(test_data$grade == "A" | test_data$grade == "B", 1, 0)
+
+#glm predict on test data
+test_data$prob = predict(ml_model, newdata=test_data, type="response")
+test_data$prediction = ifelse(test_data$prob > 0.53, 1, 0)
+mean(test_data$highgrade == test_data$prediction)
+
+#tree predict on test data
+y = predict(fit, test_data, type="class")
+y = as.numeric(levels(y)[y])
+mean(y == test_data$highgrade)
+
+#all zeros
+mean(test_data$highgrade == 0)
+
+#randomly generate 0 or 1
+mean(test_data$highgrade == (runif(nrow(test_data), 0, 1)< 1))
+```
+
